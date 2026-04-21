@@ -1,5 +1,6 @@
-require('dotenv').config();
+require('dotenv').config({ path: '.env' });
 const { Client, GatewayIntentBits } = require('discord.js');
+const { initDatabase } = require('./db');
 
 const client = new Client({
     intents: [
@@ -12,6 +13,7 @@ const client = new Client({
 
 client.once('ready', () => {
     console.log(`✓ Bot logged in as ${client.user.tag}`);
+    initDatabase();
 });
 
 client.on('messageCreate', (message) => {
