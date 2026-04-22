@@ -7,6 +7,9 @@ const {
     addMemberIfNotExistByMessage,
     addMessage,
     editMessage,
+    deleteMessage,
+    initialAddingOfAll,
+    initialAddingOfOne,
 } = require('./functions');
 
 const client = new Client({
@@ -18,8 +21,30 @@ const client = new Client({
     ],
 });
 
-client.once('clientReady', () => {
+client.once('clientReady', async () => {
     console.log(`✓ Bot logged in as ${client.user.tag}`);
+
+    console.log(client.guilds.cache.first());
+
+    try {
+        await initialAddingOfAll(client.guilds.cache);
+
+        setInterval(() => {
+            await initialAddingOfAll(client.guilds.cache);
+        }, 15 * 60 * 1000);
+    } catch (err) {
+        console.error('DB seed error:', err.message);
+    }
+});
+
+client.on('guildCreate', async (guild) => {
+    console.log(`Joined new server: ${guild.name} (ID: ${guild.id})`);
+
+    try {
+        await initialAddingOfOne(guild);
+    } catch (err) {
+        console.error('DB seed error:', err.message);
+    }
 });
 
 client.on('messageCreate', async (message) => {
@@ -65,7 +90,7 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
     }
 });
 
-client.on('messageDelete', (message) => {
+client.on('messageDelete', async (message) => {
     console.log('[DELETE]', {
         id: message.id,
         authorId: message.author?.id || null,
@@ -75,10 +100,10 @@ client.on('messageDelete', (message) => {
     });
 
     try {
-        await addServerIfNotExistByMessage(newMessage);
-        await addChannelIfNotExistByMessage(newMessage);
-        await addMemberIfNotExistByMessage(newMessage);
-        await deleteMessage(nmessage);
+        await addServerIfNotExistByMessage(message);
+        await addChannelIfNotExistByMessage(message);
+        await addMemberIfNotExistByMessage(message);
+        await deleteMessage(message.id);
     } catch (err) {
         console.error('DB error:', err.message);
     }
