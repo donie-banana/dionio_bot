@@ -1,36 +1,48 @@
 require('dotenv').config({ path: '.env' });
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, Partials } = require('discord.js');
 const { initDatabase, query, execute, sql } = require('./db');
 const {
+    logWithTimestamp,
     addServerIfNotExistByMessage,
     addChannelIfNotExistByMessage,
     addMemberIfNotExistByMessage,
+    addReaction,
+    deleteReaction,
     addMessage,
     editMessage,
     deleteMessage,
     initialAddingOfAll,
     initialAddingOfOne,
+    deleteServerDataPermanently,
 } = require('./functions');
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMessageReactions,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.DirectMessages,
+    ],
+    partials: [
+        Partials.Message,
+        Partials.Channel,
+        Partials.Reaction,
     ],
 });
 
 client.once('clientReady', async () => {
-    console.log(`✓ Bot logged in as ${client.user.tag}`);
-
-    console.log(client.guilds.cache.first());
+    logWithTimestamp(`✓ Bot logged in as ${client.user.tag}`);
 
     try {
         await initialAddingOfAll(client.guilds.cache);
 
-        setInterval(() => {
-            await initialAddingOfAll(client.guilds.cache);
+        setInterval(async () => {
+            try {
+                await initialAddingOfAll(client.guilds.cache);
+            } catch (err) {
+                console.error('DB seed error:', err.message);
+            }
         }, 15 * 60 * 1000);
     } catch (err) {
         console.error('DB seed error:', err.message);
@@ -38,12 +50,23 @@ client.once('clientReady', async () => {
 });
 
 client.on('guildCreate', async (guild) => {
-    console.log(`Joined new server: ${guild.name} (ID: ${guild.id})`);
+    logWithTimestamp(`Joined new server: ${guild.name} (ID: ${guild.id})`);
 
     try {
         await initialAddingOfOne(guild);
     } catch (err) {
         console.error('DB seed error:', err.message);
+    }
+});
+
+client.on('guildDelete', async (guild) => {
+    logWithTimestamp(`Left server: ${guild.name} (ID: ${guild.id})`);
+
+    try {
+        await deleteServerDataPermanently(guild.id);
+        logWithTimestamp(`Purged server data for ${guild.id}`);
+    } catch (err) {
+        console.error('DB purge error:', err.message);
     }
 });
 
@@ -56,6 +79,8 @@ client.on('messageCreate', async (message) => {
         const rows = await query('SELECT 1 AS ok');
         await message.reply(`DB test: ${rows[0]?.ok === 1 ? 'ok' : 'unexpected result'}`);
     }
+
+    logWithTimestamp(`[CREATE] [${message?.id || 'unknown'}] [${message?.author?.id || 'unknown'}] [${message?.content || ''}]`);
 
     console.log(message);
 
@@ -70,15 +95,8 @@ client.on('messageCreate', async (message) => {
 });
 
 client.on('messageUpdate', async (oldMessage, newMessage) => {
-    console.log('[EDIT]', {
-        oldId: oldMessage.id,
-        newId: newMessage.id,
-        authorId: newMessage.author?.id || oldMessage.author?.id,
-        channelId: newMessage.channelId || oldMessage.channelId,
-        before: oldMessage.content,
-        after: newMessage.content,
-        editedAt: newMessage.editedAt?.toISOString() || null,
-    });
+    const editedContent = newMessage.content || oldMessage.content || '';
+    logWithTimestamp(`[EDIT] [${newMessage?.id || oldMessage?.id || 'unknown'}] [${newMessage?.author?.id || oldMessage?.author?.id || 'unknown'}] [${editedContent}]`);
 
     try {
         await addServerIfNotExistByMessage(newMessage);
@@ -91,13 +109,7 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
 });
 
 client.on('messageDelete', async (message) => {
-    console.log('[DELETE]', {
-        id: message.id,
-        authorId: message.author?.id || null,
-        channelId: message.channelId,
-        content: message.content || null,
-        deletedAt: new Date().toISOString(),
-    });
+    logWithTimestamp(`[DELETE] [${message?.id || 'unknown'}] [${message?.author?.id || 'unknown'}] [${message?.content || ''}]`);
 
     try {
         await addServerIfNotExistByMessage(message);
@@ -106,6 +118,56 @@ client.on('messageDelete', async (message) => {
         await deleteMessage(message.id);
     } catch (err) {
         console.error('DB error:', err.message);
+    }
+});
+
+client.on('messageReactionAdd', async (reaction, user) => {
+    if (user?.bot) return;
+
+    try {
+        if (reaction.partial) await reaction.fetch();
+        if (reaction.message?.partial) await reaction.message.fetch();
+
+        const message = reaction.message;
+        if (!message?.guildId) return;
+
+        logWithTimestamp(`[REACTION_ADD] [${message?.id || 'unknown'}] [${user?.id || 'unknown'}] [${reaction?.emoji?.toString() || ''}]`);
+
+        await addServerIfNotExistByMessage(message);
+        await addChannelIfNotExistByMessage(message);
+        await addMemberIfNotExistByMessage({
+            author: user,
+            guildId: message.guildId,
+            guild: message.guild,
+        });
+        await addReaction(reaction, user);
+    } catch (err) {
+        console.error('Reaction add error:', err.message);
+    }
+});
+
+client.on('messageReactionRemove', async (reaction, user) => {
+    if (user?.bot) return;
+
+    try {
+        if (reaction.partial) await reaction.fetch();
+        if (reaction.message?.partial) await reaction.message.fetch();
+
+        const message = reaction.message;
+        if (!message?.guildId) return;
+
+        logWithTimestamp(`[REACTION_REMOVE] [${message?.id || 'unknown'}] [${user?.id || 'unknown'}] [${reaction?.emoji?.toString() || ''}]`);
+
+        await addServerIfNotExistByMessage(message);
+        await addChannelIfNotExistByMessage(message);
+        await addMemberIfNotExistByMessage({
+            author: user,
+            guildId: message.guildId,
+            guild: message.guild,
+        });
+        await deleteReaction(reaction, user);
+    } catch (err) {
+        console.error('Reaction remove error:', err.message);
     }
 });
 
