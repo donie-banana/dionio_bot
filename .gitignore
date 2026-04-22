@@ -11,4 +11,3 @@ dist/
 build/
 *.txt
 *.db
-*_init.js
