@@ -61,7 +61,7 @@ async function addServerIfNotExistByMessage(message) {
     await addServerifNotExist(message.guildId, message.guild.name, message.guild.ownerId, message.guild.iconURL() || null, new Date().toISOString(), new Date().toISOString(), new Date().toISOString(), true)
 }
 
-async function addChannelIfNotExist(id, serverId, name, channelType, description, position, totalMessages, lastMessage, isActive, createdAt, updatedAt) {
+async function addChannelIfNotExist(id, serverId, name, channelType, description, position, lastMessage, isActive, createdAt, updatedAt) {
     const channelCheck = await query(
         'SELECT * FROM channels WHERE (id = ?)',
         [id]
@@ -69,14 +69,14 @@ async function addChannelIfNotExist(id, serverId, name, channelType, description
 
     if (channelCheck.length == 0) {
         await execute(
-            'INSERT INTO channels (id, server_id, name, channel_type, description, position, total_messages, last_message, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [id, serverId, name, channelType, description, position, totalMessages, lastMessage, isActive, createdAt, updatedAt]
+            'INSERT INTO channels (id, server_id, name, channel_type, description, position, last_message, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [id, serverId, name, channelType, description, position, lastMessage, isActive, createdAt, updatedAt]
         );
     }
 }
 
 async function addChannelIfNotExistByMessage(message) {
-    await addChannelIfNotExist(message.channelId, message.guildId, message.channel.name || 'unknown', message.channel.type || 'text', message.channel.topic || null, message.channel.position || 0, 0, null, true, new Date().toISOString(), new Date().toISOString())
+    await addChannelIfNotExist(message.channelId, message.guildId, message.channel.name || 'unknown', message.channel.type || 'text', message.channel.topic || null, message.channel.position || 0, null, true, new Date().toISOString(), new Date().toISOString())
 }
 
 async function addMemberIfNotExist(id, username, displayName, globalName, avatarUrl, bot, createdAt, updatedAt, lastSeen) {
@@ -144,11 +144,6 @@ async function addMessage(message) {
     await execute(
         'INSERT INTO messages (id, server_id, channel_id, user_id, reply_to, content, is_edited, is_deleted, created_at, edited_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [message.id, message.guildId, message.channelId, message.author.id, message.reference?.messageId || null, message.content || '', false, false, message.createdAt?.toISOString() || new Date().toISOString(), null]
-    );
-
-    await execute(
-        'UPDATE channels SET total_messages = COALESCE(total_messages, 0) + 1, last_message = ?, updated_at = ? WHERE (id = ?)',
-        [message.id, new Date().toISOString(), message.channelId]
     );
 
     if (message.attachments.size > 0) {

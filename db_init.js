@@ -37,7 +37,6 @@ const tableStatements = [
       channel_type TEXT,
       description TEXT,
       position INTEGER,
-      total_messages INTEGER DEFAULT 0,
       last_message TEXT,
       is_active TINYINT DEFAULT 1,
       created_at DATETIME NOT NULL,
