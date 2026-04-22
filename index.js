@@ -82,7 +82,7 @@ client.on('messageCreate', async (message) => {
 
     logWithTimestamp(`[CREATE] [${message?.id || 'unknown'}] [${message?.author?.id || 'unknown'}] [${message?.content || ''}]`);
 
-    console.log(message);
+    // console.log(message);
 
     try {
         await addServerIfNotExistByMessage(message);

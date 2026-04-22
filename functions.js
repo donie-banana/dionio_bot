@@ -141,15 +141,20 @@ async function addMemberRoleIfNotExist(memberId, serverId, roleId) {
 }
 
 async function addMessage(message) {
-    await execute(
-        'INSERT INTO messages (id, server_id, channel_id, user_id, reply_to, content, is_edited, is_deleted, created_at, edited_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    const messageInsert = await execute(
+        'INSERT IGNORE INTO messages (id, server_id, channel_id, user_id, reply_to, content, is_edited, is_deleted, created_at, edited_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [message.id, message.guildId, message.channelId, message.author.id, message.reference?.messageId || null, message.content || '', false, false, message.createdAt?.toISOString() || new Date().toISOString(), null]
     );
+
+    // Discord can occasionally deliver duplicate create events; skip attachment writes if message already existed.
+    if ((messageInsert?.affectedRows || 0) === 0) {
+        return;
+    }
 
     if (message.attachments.size > 0) {
         for (const att of message.attachments.values()) {
             await execute(
-                'INSERT INTO attachments (id, message_id, name, url) VALUES (?, ?, ?, ?)',
+                'INSERT IGNORE INTO attachments (id, message_id, name, url) VALUES (?, ?, ?, ?)',
                 [att.id, message.id, att.name, att.url]
             );
         }
