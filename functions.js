@@ -218,7 +218,12 @@ async function deleteServerDataPermanently(serverId) {
     );
 
     await execute(
-        'DELETE FROM reactions WHERE (server_id = ?)',
+        'DELETE FROM attachments WHERE (message_id IN (SELECT id FROM messages WHERE server_id = ?))',
+        [serverId]
+    );
+
+    await execute(
+        'DELETE FROM reactions WHERE (message_id IN (SELECT id FROM messages WHERE server_id = ?))',
         [serverId]
     );
 
